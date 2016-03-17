@@ -23,7 +23,16 @@ define('REGULAR_UPDATES_SETTINGS', serialize([
     'nodes' => TRUE,
     'users' => TRUE,
     'forum' => TRUE
-  ]
+  ],
+
+  'interval' => 'daily'
+]));
+
+define('REGULAR_UPDATES_INTERVAL_OPTIONS', serialize([
+'bi-daily' => t('Twice a day'),
+'daily' => t('Daily'),
+'weekly' => t('Weekly'),
+'monthly' => t('Monthly')
 ]));
 
 
@@ -34,10 +43,12 @@ define('REGULAR_UPDATES_SETTINGS', serialize([
 function regular_updates_admin() {
   $form = array();
 
+  $default_values = unserialize(REGULAR_UPDATES_SETTINGS);
+
   $current_values = variable_get(REGULAR_UPDATES_SETTINGS_VARNAME);
 
   if (empty($current_values)) {
-    $current_values = unserialize(REGULAR_UPDATES_SETTINGS);
+    $current_values = $default_values;
   }
 
   // todo
@@ -49,6 +60,7 @@ function regular_updates_admin() {
   $form['target_api_enable'] = array(
     '#type' => 'radio',
     '#title' => t('Enable target API'),
+    '#required' => TRUE,
     '#default_value' => $current_values['target_api_enabled'],
     '#options' => [TRUE => 'Enabled', FALSE => 'Disabled'], // this wont work - fix it.
   );
@@ -59,6 +71,7 @@ function regular_updates_admin() {
   $form['target_email_enable'] = array(
     '#type' => 'radio',
     '#title' => t('Enable target Email'),
+    '#required' => TRUE,
     '#default_value' => $current_values['target_email_enabled'],
     '#options' => ['Enabled' => TRUE, 'Disabled' => FALSE], // this wont work - fix it.
   );
@@ -69,6 +82,7 @@ function regular_updates_admin() {
   $form['target_custom_template_enable'] = array(
     '#type' => 'radio',
     '#title' => t('Enable custom template Email'),
+    '#required' => TRUE,
     '#default_value' => $current_values['target_custom_template_enabled'],
     '#options' => ['Enabled' => TRUE, 'Disabled' => FALSE], // this wont work - fix it.
   );
@@ -88,7 +102,18 @@ function regular_updates_admin() {
     '#type' => 'checkboxes',
     '#title' => t('Enable events'),
     '#default_value' => $current_values['enabled_events'],
-    '#options' => $current_values['enabled_events'], // this wont work - fix it.
+    '#options' => $default_values['enabled_events'], // this may not work - fix it.
+  );
+
+  /*
+   * Target: Intervals
+   */
+  $form['target_interval'] = array(
+    '#type' => 'select',
+    '#title' => t('Select interval'),
+    '#required' => TRUE,
+    '#default_value' => $current_values['interval'],
+    '#options' => $default_values['interval'], // this may not work - fix it.
   );
 
 
