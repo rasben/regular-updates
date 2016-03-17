@@ -1,0 +1,7 @@
+<?php
+
+/**
+ * @file
+ * Sends updates to an external source about site-events.
+ */
+

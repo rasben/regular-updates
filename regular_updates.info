@@ -1,0 +1,5 @@
+name = Regular Updates 
+description = Send regular updates of site-events to a external source (Email, API etc.).
+package = User interface
+core = 7.x
+php = 5.2
