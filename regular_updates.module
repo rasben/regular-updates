@@ -5,3 +5,111 @@
  * Sends updates to an external target about site-events.
  */
 
+define('REGULAR_UPDATES_SETTINGS_VARNAME', 'regular_updates_settings');
+
+define('REGULAR_UPDATES_SETTINGS', serialize([
+  'target_api_enabled' => FALSE,
+  'target_api_urls' => [
+
+  ],
+
+  'target_email_enabled' => FALSE,
+  'target_email_emails' => [
+  ],
+  'target_email_custom_template_enabled' => FALSE,
+  'target_email_custom_template' => '',
+
+  'enabled_events' => [
+    'nodes' => TRUE,
+    'users' => TRUE,
+    'forum' => TRUE
+  ]
+]));
+
+
+/**
+ * Implements hook_admin().
+ * Configuration page for the module.
+ */
+function regular_updates_admin() {
+  $form = array();
+
+  $current_values = variable_get(REGULAR_UPDATES_SETTINGS_VARNAME);
+
+  if (empty($current_values)) {
+    $current_values = unserialize(REGULAR_UPDATES_SETTINGS);
+  }
+
+  // todo
+  $templates_detected = [];
+
+  /*
+   * Target: API
+   */
+  $form['target_api_enable'] = array(
+    '#type' => 'radio',
+    '#title' => t('Enable target API'),
+    '#default_value' => $current_values['target_api_enabled'],
+    '#options' => [TRUE => 'Enabled', FALSE => 'Disabled'], // this wont work - fix it.
+  );
+
+  /*
+   * Target: Email
+   */
+  $form['target_email_enable'] = array(
+    '#type' => 'radio',
+    '#title' => t('Enable target Email'),
+    '#default_value' => $current_values['target_email_enabled'],
+    '#options' => ['Enabled' => TRUE, 'Disabled' => FALSE], // this wont work - fix it.
+  );
+
+  /*
+   * Target: Templates
+   */
+  $form['target_custom_template_enable'] = array(
+    '#type' => 'radio',
+    '#title' => t('Enable custom template Email'),
+    '#default_value' => $current_values['target_custom_template_enabled'],
+    '#options' => ['Enabled' => TRUE, 'Disabled' => FALSE], // this wont work - fix it.
+  );
+
+  $form['target_custom_template'] = array(
+    '#type' => 'select',
+    '#title' => t('Select available template (from detected)'),
+    '#default_value' => $current_values['target_custom_template'],
+    '#options' => $templates_detected
+  );
+
+
+  /*
+   * Target: Events
+   */
+  $form['target_events_enable'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Enable events'),
+    '#default_value' => $current_values['enabled_events'],
+    '#options' => $current_values['enabled_events'], // this wont work - fix it.
+  );
+
+
+
+
+  return system_settings_form($form);
+}
+
+/**
+ * Implements hook_menu().
+ * Link for configuration pages.
+ */
+function embedded_elements_menu() {
+  $items = array();
+
+  $items['admin/settings/regular_updates'] = array(
+    'title' => t('Regular Updates - Global Settings'),
+    'description' => '',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('regular_updates_admin'),
+    'access arguments' => array('administer regular updates settings'),
+    'type' => MENU_NORMAL_ITEM,
+   );
+}
