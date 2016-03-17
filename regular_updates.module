@@ -7,20 +7,22 @@
 
 define('REGULAR_UPDATES_SETTINGS_VARNAME', 'regular_updates_settings');
 
+define('REGULAR_UPDATES_TEMPLATE_DEFAULT', 'regular_template.tpl.php');
+
 // The structure of the settings array.
 define('REGULAR_UPDATES_SETTINGS', serialize([
-  'target_api_enabled' => FALSE,
+  'target_api_enabled' => 0,
   'target_api_urls' => [],
 
-  'target_email_enabled' => FALSE,
+  'target_email_enabled' => 0,
   'target_email_emails' => [],
-  'target_email_custom_template_enabled' => FALSE,
-  'target_email_custom_template' => '',
+  'target_email_custom_template_enabled' => 1,
+  'target_email_custom_template' => REGULAR_UPDATES_TEMPLATE_DEFAULT,
 
   'enabled_events' => [
-    'nodes' => TRUE,
-    'users' => TRUE,
-    'forum' => TRUE
+    'nodes' => 1,
+    'users' => 1,
+    'forum' => 1
   ],
 
   'interval' => 'daily'
@@ -52,12 +54,18 @@ function regular_updates_admin() {
 
   $current_values = variable_get(REGULAR_UPDATES_SETTINGS_VARNAME);
 
+
   if (empty($current_values)) {
     $current_values = $default_values;
   }
+  else {
+    $current_values = json_decode($current_values, TRUE);
+  }
 
   // todo
-  $templates_detected = [];
+  $templates_detected = [
+    REGULAR_UPDATES_TEMPLATE_DEFAULT => 'Default Template File'
+  ];
 
   /*
    * Target: API
@@ -66,9 +74,14 @@ function regular_updates_admin() {
     '#type' => 'checkbox',
     '#title' => t('Enable'),
     '#prefix' => '<h2>' . t('Target settings: API') . '</h2>',
-    '#required' => TRUE,
     '#default_value' => $current_values['target_api_enabled'],
     '#options' => [TRUE => 'Enabled', FALSE => 'Disabled'], // this wont work - fix it.
+  );
+
+  $form['target_api_urls'] = array(
+    '#type' => 'textarea',
+    '#default_value' => $current_values['target_api_urls'],
+    '#title' => t('API URLs (comma seperated)'),
   );
 
   /*
@@ -78,10 +91,14 @@ function regular_updates_admin() {
     '#type' => 'checkbox',
     '#title' => t('Enable'),
     '#prefix' => '<h2>' . t('Target settings: Email') . '</h2>',
-
-    '#required' => TRUE,
     '#default_value' => $current_values['target_email_enabled'],
     '#options' => ['Enabled' => TRUE, 'Disabled' => FALSE], // this wont work - fix it.
+  );
+
+  $form['target_email_emails'] = array(
+    '#type' => 'textarea',
+    '#default_value' => $current_values['target_email_emails'],
+    '#title' => t('Emails (comma seperated)'),
   );
 
   /*
@@ -90,13 +107,13 @@ function regular_updates_admin() {
   $form['target_email_custom_template_enable'] = array(
     '#type' => 'checkbox',
     '#title' => t('Enable email custom template'),
-    '#required' => TRUE,
     '#default_value' => $current_values['target_email_custom_template_enabled'],
     '#options' => ['Enabled' => TRUE, 'Disabled' => FALSE], // this wont work - fix it.
   );
 
   $form['target_email_custom_template'] = array(
     '#type' => 'select',
+    '#required' => TRUE,
     '#title' => t('Custom template file to use, if enabled above'),
     '#default_value' => $current_values['target_email_custom_template'],
     '#options' => $templates_detected
@@ -106,7 +123,7 @@ function regular_updates_admin() {
   /*
    * Target: Events
    */
-  $form['target_events_enable'] = array(
+  $form['events_enable'] = array(
     '#type' => 'checkboxes',
     '#title' => t('Enable events'),
     '#default_value' => $current_values['enabled_events'],
@@ -116,7 +133,7 @@ function regular_updates_admin() {
   /*
    * Target: Intervals
    */
-  $form['target_interval'] = array(
+  $form['interval'] = array(
     '#type' => 'select',
     '#title' => t('Select interval'),
     '#required' => TRUE,
@@ -145,5 +162,29 @@ function regular_updates_menu() {
    );
 
   return $items;
+
+}
+
+/**
+ * Implements hook_admin_validate().
+ * Manipulating and checking data before it's sent.
+ */
+function regular_updates_admin_validate($form, &$form_state) {
+  dpm($form_state);
+
+  $regular_updates_values = [
+    'target_api_enabled' => $form_state['values']['target_api_enable'],
+    'target_email_enabled' => $form_state['values']['target_email_enable'],
+    'target_api_urls' => $form_state['values']['target_api_urls'],
+    'target_email_emails' => $form_state['values']['target_email_emails'],
+    'target_email_custom_template_enabled' => $form_state['values']['target_email_custom_template_enable'],
+    'enabled_events' => $form_state['values']['events_enable'],
+    'target_email_custom_template' => $form_state['values']['target_email_custom_template'],
+    'interval' => $form_state['values']['interval']
+
+  ];
+
+
+  variable_set(REGULAR_UPDATES_SETTINGS_VARNAME, json_encode($regular_updates_values));
 
 }
