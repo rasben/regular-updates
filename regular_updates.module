@@ -54,7 +54,6 @@ function regular_updates_admin() {
 
   $current_values = variable_get(REGULAR_UPDATES_SETTINGS_VARNAME);
 
-
   if (empty($current_values)) {
     $current_values = $default_values;
   }
@@ -119,7 +118,6 @@ function regular_updates_admin() {
     '#options' => $templates_detected
   );
 
-
   /*
    * Target: Events
    */
@@ -141,7 +139,6 @@ function regular_updates_admin() {
     '#options' => unserialize(REGULAR_UPDATES_INTERVAL_OPTIONS)
   );
 
-
   return system_settings_form($form);
 }
 
@@ -162,7 +159,6 @@ function regular_updates_menu() {
    );
 
   return $items;
-
 }
 
 /**
@@ -170,8 +166,6 @@ function regular_updates_menu() {
  * Manipulating and checking data before it's sent.
  */
 function regular_updates_admin_validate($form, &$form_state) {
-  dpm($form_state);
-
   $regular_updates_values = [
     'target_api_enabled' => $form_state['values']['target_api_enable'],
     'target_email_enabled' => $form_state['values']['target_email_enable'],
@@ -181,10 +175,7 @@ function regular_updates_admin_validate($form, &$form_state) {
     'enabled_events' => $form_state['values']['events_enable'],
     'target_email_custom_template' => $form_state['values']['target_email_custom_template'],
     'interval' => $form_state['values']['interval']
-
   ];
 
-
   variable_set(REGULAR_UPDATES_SETTINGS_VARNAME, json_encode($regular_updates_values));
-
 }
