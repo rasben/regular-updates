@@ -2,6 +2,6 @@
 
 /**
  * @file
- * Sends updates to an external source about site-events.
+ * Sends updates to an external target about site-events.
  */
 
