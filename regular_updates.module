@@ -154,7 +154,7 @@ function regular_updates_admin() {
   // Creating an array of 24, with starting zeros.
   $hours;
 
-  for () { //todo asap
+  for ($value = 0; $value <= 24; $value++) {
     if ($value <= 9) {
       // Making it 2digit 24H format.
       $value = '0' . $value;
@@ -233,6 +233,13 @@ function regular_updates_cron() {
     return;
   }
 
+  $trigger_hour = $current_settings['trigger_hour'];
+
+  // We're adding 10 minutes to the trigger time, as the cron most likely will be set up to run every hour,
+  // and we want it to run as close to the selected trigger hour as possible.
+  $trigger_time = $trigger_hour . ':10';
+
+  //todo - check for trigger hour also
   if (time() >= $next_execute){
 
     watchdog('regular_updates_cron', 'Module "Regular Updates" sent out updates');
@@ -303,7 +310,6 @@ function _regular_updates_create_data($settings) {
   if ($settings['target_api_enabled'] == 1) {
     $url_data = json_encode($data);
   }
-
 
   return array(
     'email_data' => $email_data,
