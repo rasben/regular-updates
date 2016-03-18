@@ -7,7 +7,7 @@
 
 define('REGULAR_UPDATES_SETTINGS_VARNAME', 'regular_updates_settings');
 
-define('REGULAR_UPDATES_TEMPLATE_DEFAULT', 'regular_template.tpl.php');
+define('REGULAR_UPDATES_TEMPLATE_DEFAULT', 'templates/regular_updates_email_template.tpl.php');
 
 define('REGULAR_UPDATES_NEXT_EXECUTE_VARNAME', 'regular_updates_next_execute');
 
@@ -18,7 +18,7 @@ define('REGULAR_UPDATES_SETTINGS', serialize(array(
 
   'target_email_enabled' => 0,
   'target_email_emails' => array(),
-  'target_email_custom_template_enabled' => 1,
+  'target_email_custom_template_enabled' => 0,
   'target_email_custom_template' => REGULAR_UPDATES_TEMPLATE_DEFAULT,
 
   'enabled_events' => array(
@@ -27,7 +27,8 @@ define('REGULAR_UPDATES_SETTINGS', serialize(array(
     'forum' => 1
   ),
 
-  'interval' => 'daily'
+  'interval' => 'daily',
+  'trigger_hour' => '00'
 )));
 
 define('REGULAR_UPDATES_EVENT_OPTIONS', serialize(array(
@@ -50,6 +51,12 @@ define('REGULAR_UPDATES_INTERVAL_STATEMENTS', serialize(array(
   'weekly' => '+7 day',
   'bi-monthly' => '+14 day',
   'monthly' => '+1 month'
+)));
+
+define('REGULAR_UPDATES_EVENT_DATA_VARNAMES', serialize(array(
+  'nodes' => 'regular_updates_event_data_nodes',
+  'users' => 'regular_udpates_event_data_users',
+  'forum' => 'regular_udpates_event_data_forum',
 )));
 
 /**
@@ -139,6 +146,32 @@ function regular_updates_admin() {
     '#options' => unserialize(REGULAR_UPDATES_INTERVAL_OPTIONS)
   );
 
+  /*
+   * Target: Trigger Hours
+   */
+
+
+  // Creating an array of 24, with starting zeros.
+  $hours;
+
+  for () { //todo asap
+    if ($value <= 9) {
+      // Making it 2digit 24H format.
+      $value = '0' . $value;
+    }
+
+    $hours[$value] = $value . ':00';
+  }
+
+  $form['trigger_hour'] = array(
+    '#type' => 'select',
+    '#title' => t('Select closest hour to send out events'),
+    '#required' => TRUE,
+    '#default_value' => $current_values['trigger_hour'],
+    '#description' => t('The precision of this totally depends on your current setup (How often the CRON runs). The more often you run cron, the more precise this (and other modules) will be - however it may slow your site.'),
+    '#options' => $hours
+  );
+
   return system_settings_form($form);
 }
 
@@ -174,7 +207,8 @@ function regular_updates_admin_validate($form, &$form_state) {
     'target_email_custom_template_enabled' => $form_state['values']['target_email_custom_template_enable'],
     'enabled_events' => $form_state['values']['events_enable'],
     'target_email_custom_template' => $form_state['values']['target_email_custom_template'],
-    'interval' => $form_state['values']['interval']
+    'interval' => $form_state['values']['interval'],
+    'trigger_hour' => $form_state['values']['trigger_hour']
   );
 
   variable_set(REGULAR_UPDATES_SETTINGS_VARNAME, json_encode($regular_updates_values));
@@ -242,15 +276,43 @@ function _regular_updates_send_data($settings) {
  * Custom helper function for creating the data to be sent out.
  */
 function _regular_updates_create_data($settings) {
+  $data = array();
+  $url_data = NULL;
+  $email_data = NULL;
+
+  $event_data_variables = unserialize(REGULAR_UPDATES_EVENT_DATA_VARNAMES);
+
+  foreach ($event_data_variables as $key => $value) {
+    $event_data = variable_get($value);
+
+    if ($event_data) {
+      $data[$key] = json_decode($event_data);
+    }
+
+    else {
+      $data[$key] = array();
+    }
+  }
+
+  if ($settings['target_email_enabled'] == 1) {
+    // Generate the email template
+    // maybe as a helper function?
+
+  }
+
+  if ($settings['target_api_enabled'] == 1) {
+    $url_data = json_encode($data);
+  }
+
 
   return array(
-    'email_data' => NULL,
-    'url_data' => NULL
+    'email_data' => $email_data,
+    'url_data' => $url_data
   );
 }
 
 /*
- * Custom helper  function for getting settings
+ * Custom helper function for getting settings
  * returns settings array.
  * If values are not set, it will return the default template.
  */

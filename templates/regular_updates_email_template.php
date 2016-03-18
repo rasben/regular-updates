@@ -1,0 +1,1 @@
+regular_updates_email_template.php
