@@ -9,39 +9,48 @@ define('REGULAR_UPDATES_SETTINGS_VARNAME', 'regular_updates_settings');
 
 define('REGULAR_UPDATES_TEMPLATE_DEFAULT', 'regular_template.tpl.php');
 
+define('REGULAR_UPDATES_NEXT_EXECUTE_VARNAME', 'regular_updates_next_execute');
+
 // The structure of the settings array.
-define('REGULAR_UPDATES_SETTINGS', serialize([
+define('REGULAR_UPDATES_SETTINGS', serialize(array(
   'target_api_enabled' => 0,
-  'target_api_urls' => [],
+  'target_api_urls' => array(),
 
   'target_email_enabled' => 0,
-  'target_email_emails' => [],
+  'target_email_emails' => array(),
   'target_email_custom_template_enabled' => 1,
   'target_email_custom_template' => REGULAR_UPDATES_TEMPLATE_DEFAULT,
 
-  'enabled_events' => [
+  'enabled_events' => array(
     'nodes' => 1,
     'users' => 1,
     'forum' => 1
-  ],
+  ),
 
   'interval' => 'daily'
-]));
+)));
 
-define('REGULAR_UPDATES_EVENT_OPTIONS', serialize([
-'nodes' => t('Nodes'),
-'users' => t('Users'),
-'forum' => t('Forum'),
-]));
+define('REGULAR_UPDATES_EVENT_OPTIONS', serialize(array(
+  'nodes' => t('Nodes'),
+  'users' => t('Users'),
+  'forum' => t('Forum'),
+)));
 
-define('REGULAR_UPDATES_INTERVAL_OPTIONS', serialize([
-'bi-daily' => t('Twice a day'),
-'daily' => t('Daily'),
-'weekly' => t('Weekly'),
-'bi-monthly' => t('Every two weeks'),
-'monthly' => t('Monthly')
-]));
+define('REGULAR_UPDATES_INTERVAL_OPTIONS', serialize(array(
+  'daily' => t('Daily'),
+  'weekly' => t('Weekly'),
+  'bi-monthly' => t('Every two weeks'),
+  'monthly' => t('Monthly')
+)));
 
+// We're using strtotime instead of UNIX times, so the code
+// doesn't break at daylight savings. ;)
+define('REGULAR_UPDATES_INTERVAL_STATEMENTS', serialize(array(
+  'daily' => '+1 day',
+  'weekly' => '+7 day',
+  'bi-monthly' => '+14 day',
+  'monthly' => '+1 month'
+)));
 
 /**
  * Implements hook_admin().
@@ -50,16 +59,7 @@ define('REGULAR_UPDATES_INTERVAL_OPTIONS', serialize([
 function regular_updates_admin() {
   $form = array();
 
-  $default_values = unserialize(REGULAR_UPDATES_SETTINGS);
-
-  $current_values = variable_get(REGULAR_UPDATES_SETTINGS_VARNAME);
-
-  if (empty($current_values)) {
-    $current_values = $default_values;
-  }
-  else {
-    $current_values = json_decode($current_values, TRUE);
-  }
+  $current_values = _regular_updates_get_settings();
 
   // todo
   $templates_detected = [
@@ -166,7 +166,7 @@ function regular_updates_menu() {
  * Manipulating and checking data before it's sent.
  */
 function regular_updates_admin_validate($form, &$form_state) {
-  $regular_updates_values = [
+  $regular_updates_values = array(
     'target_api_enabled' => $form_state['values']['target_api_enable'],
     'target_email_enabled' => $form_state['values']['target_email_enable'],
     'target_api_urls' => $form_state['values']['target_api_urls'],
@@ -175,7 +175,97 @@ function regular_updates_admin_validate($form, &$form_state) {
     'enabled_events' => $form_state['values']['events_enable'],
     'target_email_custom_template' => $form_state['values']['target_email_custom_template'],
     'interval' => $form_state['values']['interval']
-  ];
+  );
 
   variable_set(REGULAR_UPDATES_SETTINGS_VARNAME, json_encode($regular_updates_values));
+}
+
+/*
+ * Implements hook_cron().
+ * The cron trigger to send out data.
+ */
+function regular_updates_cron() {
+  $current_settings = _regular_updates_get_settings();
+
+  // Getting the strtotime statement (e.g. "+1 day").
+  $interval_statements = unserialize(REGULAR_UPDATES_INTERVAL_STATEMENTS);
+  $interval_statement = $interval_statements[$current_settings['interval']];
+
+  $next_execute = variable_get(REGULAR_UPDATES_NEXT_EXECUTE_VARNAME);
+
+  if (!$next_execute) {
+    variable_set(REGULAR_UPDATES_NEXT_EXECUTE_VARNAME, strtotime($interval_statement));
+
+    return;
+  }
+
+  if (time() >= $next_execute){
+
+    watchdog('regular_updates_cron', 'Module "Regular Updates" sent out updates');
+
+    // We're sending the now static settings array along, as we
+    // dont want the values to change half-way through.
+    _regular_updates_send_data($current_settings);
+  }
+}
+
+/*
+ * Custom helper function for sending out external data.
+ */
+function _regular_updates_send_data($settings) {
+
+  $data = _regular_updates_create_data($settings);
+
+
+  if (!is_null($email_data)){
+    $target_emails = $settings['target_email_emails'];
+
+    //todo
+
+    foreach ($target_emails as $email) {
+
+    }
+  }
+
+  if (!is_null($url_data)){
+    $target_urls = $settings['target_api_urls'];
+
+    //todo: test
+
+    foreach ($target_urls as $url) {
+      drupal_http_request($url, $options = array('data' => $url_data));
+    }
+  }
+}
+
+/*
+ * Custom helper function for creating the data to be sent out.
+ */
+function _regular_updates_create_data($settings) {
+
+  return array(
+    'email_data' => NULL,
+    'url_data' => NULL
+  );
+}
+
+/*
+ * Custom helper  function for getting settings
+ * returns settings array.
+ * If values are not set, it will return the default template.
+ */
+function _regular_updates_get_settings(){
+  $default_settings = unserialize(REGULAR_UPDATES_SETTINGS);
+
+  $current_settings = variable_get(REGULAR_UPDATES_SETTINGS_VARNAME);
+
+  if (empty($current_settings)) {
+    $current_settings = $default_settings;
+  }
+  else {
+    $current_settings = json_decode($current_settings, TRUE);
+  }
+
+  return $current_settings;
+
 }
