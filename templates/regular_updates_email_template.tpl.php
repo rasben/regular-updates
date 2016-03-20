@@ -1,0 +1,1 @@
+This is the email template. <?php print_r($data); ?>

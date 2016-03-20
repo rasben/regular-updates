@@ -4,12 +4,11 @@
  * @file
  * Sends updates to an external target about site-events.
  */
-
 define('REGULAR_UPDATES_SETTINGS_VARNAME', 'regular_updates_settings');
 
-define('REGULAR_UPDATES_TEMPLATE_DEFAULT', 'templates/regular_updates_email_template.tpl.php');
-
 define('REGULAR_UPDATES_NEXT_EXECUTE_VARNAME', 'regular_updates_next_execute');
+
+define('SITE_NAME', variable_get('site_name', ''));
 
 // The structure of the settings array.
 define('REGULAR_UPDATES_SETTINGS', serialize(array(
@@ -17,9 +16,10 @@ define('REGULAR_UPDATES_SETTINGS', serialize(array(
   'target_api_urls' => array(),
 
   'target_email_enabled' => 0,
+  'target_email_subject' => t('Your Regular Updates about your Drupal site ') . SITE_NAME,
   'target_email_emails' => array(),
-  'target_email_custom_template_enabled' => 0,
-  'target_email_custom_template' => REGULAR_UPDATES_TEMPLATE_DEFAULT,
+  'target_email_send_as_json' => 0,
+  'target_email_custom_template' => 'regular_updates_email_template',
 
   'enabled_events' => array(
     'nodes' => 1,
@@ -28,7 +28,7 @@ define('REGULAR_UPDATES_SETTINGS', serialize(array(
   ),
 
   'interval' => 'daily',
-  'trigger_hour' => '00'
+  'trigger_hour' => '09'
 )));
 
 define('REGULAR_UPDATES_EVENT_OPTIONS', serialize(array(
@@ -59,28 +59,53 @@ define('REGULAR_UPDATES_EVENT_DATA_VARNAMES', serialize(array(
   'forum' => 'regular_udpates_event_data_forum',
 )));
 
+define('REGULAR_UPDATES_EVENT_DATA_STRUCTURE_NODES', serialize(array(
+  'nid' => '',
+  'author_uid' => '',
+  'author_name' => '',
+  'author_picture' => '',
+  'author_original_uid' => '',
+  'author_original_name' => '',
+  'author_original_picture' => '',
+  'time' => '',
+  'title' => '',
+  'action' => ''
+)));
+
+define('REGULAR_UPDATES_EVENT_DATA_STRUCTURE_USERS', serialize(array(
+  'uid' => '',
+  'name' => '',
+  'picture' => '',
+  'author_uid' => '',
+  'author_name' => '',
+  'author_picture' => '',
+  'time' => '',
+  'action' => ''
+)));
+
 /**
  * Implements hook_admin().
  * Configuration page for the module.
  */
 function regular_updates_admin() {
   $form = array();
-
   $current_values = _regular_updates_get_settings();
 
   // todo
   $templates_detected = [
-    REGULAR_UPDATES_TEMPLATE_DEFAULT => 'Default Template File'
+    'regular_updates_email_template' => 'Default Template File'
   ];
 
   /*
    * Target: API
    */
+  $target_api_urls = _regular_updates_commaspace_encode($current_values['target_api_urls']);
+
   $form['target_api_enable'] = array(
     '#type' => 'checkbox',
     '#title' => t('Enable'),
     '#prefix' => '<h2>' . t('Target settings: API') . '</h2>',
-    '#default_value' => $current_values['target_api_enabled'],
+    '#default_value' => $target_api_urls,
     '#options' => [TRUE => 'Enabled', FALSE => 'Disabled'], // this wont work - fix it.
   );
 
@@ -93,6 +118,9 @@ function regular_updates_admin() {
   /*
    * Target: Email
    */
+
+  $target_email_emails = _regular_updates_commaspace_encode($current_values['target_email_emails']);
+
   $form['target_email_enable'] = array(
     '#type' => 'checkbox',
     '#title' => t('Enable'),
@@ -101,27 +129,31 @@ function regular_updates_admin() {
     '#options' => ['Enabled' => TRUE, 'Disabled' => FALSE], // this wont work - fix it.
   );
 
+  $form['target_email_subject'] = array(
+    '#type' => 'textfield',
+    '#title' => t('The subject line that is sent with the email'),
+    '#default_value' => $current_values['target_email_subject'],
+  );
+
   $form['target_email_emails'] = array(
     '#type' => 'textarea',
-    '#default_value' => $current_values['target_email_emails'],
+    '#default_value' => $target_email_emails,
     '#title' => t('Emails (comma seperated)'),
   );
 
-  /*
-   * Target: Templates
-   */
-  $form['target_email_custom_template_enable'] = array(
+  $form['target_email_send_as_json'] = array(
     '#type' => 'checkbox',
-    '#title' => t('Enable email custom template'),
-    '#default_value' => $current_values['target_email_custom_template_enabled'],
-    '#options' => ['Enabled' => TRUE, 'Disabled' => FALSE], // this wont work - fix it.
+    '#title' => t('Send email as raw JSON'),
+    '#default_value' => $current_values['target_email_send_as_json'],
+    '#options' => ['Enabled' => 1, 'Disabled' => 0], // this wont work - fix it.
   );
 
   $form['target_email_custom_template'] = array(
     '#type' => 'select',
     '#required' => TRUE,
-    '#title' => t('Custom template file to use, if enabled above'),
+    '#title' => t('Template file to use (if RAW JSON is not enabled'),
     '#default_value' => $current_values['target_email_custom_template'],
+    '#description' => t('In the future you will be able to add your own, custom template file in your theme folder - but for now, this is not possible.'), //todo
     '#options' => $templates_detected
   );
 
@@ -132,7 +164,8 @@ function regular_updates_admin() {
     '#type' => 'checkboxes',
     '#title' => t('Enable events'),
     '#default_value' => $current_values['enabled_events'],
-    '#options' => unserialize(REGULAR_UPDATES_EVENT_OPTIONS)
+    '#options' => unserialize(REGULAR_UPDATES_EVENT_OPTIONS),
+    '#description' => 'For now, selecting forum will do nothing.'
   );
 
   /*
@@ -150,8 +183,7 @@ function regular_updates_admin() {
    * Target: Trigger Hours
    */
 
-
-  // Creating an array of 24, with starting zeros.
+  // Creating an array of 24, with trailing zeros.
   $hours;
 
   for ($value = 0; $value <= 24; $value++) {
@@ -168,7 +200,7 @@ function regular_updates_admin() {
     '#title' => t('Select closest hour to send out events'),
     '#required' => TRUE,
     '#default_value' => $current_values['trigger_hour'],
-    '#description' => t('The precision of this totally depends on your current setup (How often the CRON runs). The more often you run cron, the more precise this (and other modules) will be - however it may slow your site.'),
+    '#description' => t('The precision of this totally depends on your current site setup (How often cron jobs runs). The more often you run cron, the more precise this (and other modules) will be - however it may slow your site and drain resources.'),
     '#options' => $hours
   );
 
@@ -199,12 +231,17 @@ function regular_updates_menu() {
  * Manipulating and checking data before it's sent.
  */
 function regular_updates_admin_validate($form, &$form_state) {
+
+  $target_api_urls_array = _regular_updates_commaspace_decode($form_state['values']['target_api_urls']);
+  $target_email_emails_array = _regular_updates_commaspace_decode($form_state['values']['target_email_emails']);
+
   $regular_updates_values = array(
     'target_api_enabled' => $form_state['values']['target_api_enable'],
     'target_email_enabled' => $form_state['values']['target_email_enable'],
-    'target_api_urls' => $form_state['values']['target_api_urls'],
-    'target_email_emails' => $form_state['values']['target_email_emails'],
-    'target_email_custom_template_enabled' => $form_state['values']['target_email_custom_template_enable'],
+    'target_api_urls' => $target_api_urls_array,
+    'target_email_subject' => $form_state['values']['target_email_subject'],
+    'target_email_emails' => $target_email_emails_array,
+    'target_email_send_as_json' => $form_state['values']['target_email_send_as_json'],
     'enabled_events' => $form_state['values']['events_enable'],
     'target_email_custom_template' => $form_state['values']['target_email_custom_template'],
     'interval' => $form_state['values']['interval'],
@@ -237,10 +274,11 @@ function regular_updates_cron() {
 
   // We're adding 10 minutes to the trigger time, as the cron most likely will be set up to run every hour,
   // and we want it to run as close to the selected trigger hour as possible.
-  $trigger_time = $trigger_hour . ':10';
+  $trigger_time = $trigger_hour . '10';
 
-  //todo - check for trigger hour also
-  if (time() >= $next_execute){
+  // todo: test this
+  // todo: What if the user has set the cron to run only before the selected trigger time?
+  if ((time() >= $next_execute) && ($trigger_time > date('Hi'))){
 
     watchdog('regular_updates_cron', 'Module "Regular Updates" sent out updates');
 
@@ -251,36 +289,182 @@ function regular_updates_cron() {
 }
 
 /*
+ * Implements hook_theme
+ * Generating mail template contents.
+ */
+function regular_updates_theme($existing, $type, $theme, $path) {
+  //todo Figure out a way to reuse the settings, to avoid doing variable_get again
+  $current_settings = _regular_updates_get_settings();
+
+  return array(
+    'regular_updates_email_template' => array(
+      'variables' => array('data' => array()),
+      'template' => $current_settings['target_email_custom_template'],
+      'path' => drupal_get_path('module', 'regular_updates') . '/templates/'
+    ),
+   );
+}
+
+/*
+ * Implements hook_mail
+ * Sending mails, the Drupal way.
+ */
+function regular_updates_mail($key, &$message, $params) {
+  switch ($key) {
+    case 'regular_updates_email_template':
+      // Set headers etc
+      $message['subject'] = $params['subject'];
+      $message['body'][] = $params['body'];
+      break;
+  }
+}
+
+/*
+ * Implements hook_node_presave
+ * Getting the info of affected nodes updated/created
+ */
+function regular_updates_node_presave($node) {
+  global $user;
+  $log_data = unserialize(REGULAR_UPDATES_EVENT_DATA_STRUCTURE_NODES);
+
+  $log_data['nid'] = $node->vid;
+  $log_data['title'] = $node->title;
+  $log_data['time'] = $node->timestamp;
+
+  $log_data['author_uid'] = $user->uid;
+  $log_data['author_name'] = $user->name;
+  $log_data['author_picture'] = $user->picture;
+
+  $log_data['author_original_uid'] = $node->uid;
+  $log_data['author_original_name'] = $node->name;
+  $log_data['author_original_picture'] = $node->picture;
+
+  if ($node->is_new) {
+    $log_data['action'] = 'create';
+  }
+
+  else {
+    $log_data['action'] = 'update';
+  }
+
+  _regular_updates_add_to_event_log('nodes', $log_data);
+}
+
+/*
+ * Implements hook_node_delete
+ * Getting the info of affected nodes deleted
+ */
+function regular_updates_node_delete($node) {
+  global $user;
+  $log_data = unserialize(REGULAR_UPDATES_EVENT_DATA_STRUCTURE_NODES);
+
+  $log_data['nid'] = $node->vid;
+  $log_data['title'] = $node->title;
+  $log_data['time'] = time();
+
+  $log_data['author_uid'] = $user->uid;
+  $log_data['author_name'] = $user->name;
+  $log_data['author_picture'] = $user->picture;
+
+  $log_data['author_original_uid'] = $node->uid;
+  $log_data['author_original_name'] = $node->name;
+  $log_data['author_original_picture'] = $node->picture;
+
+  $log_data['action'] = 'delete';
+
+  _regular_updates_add_to_event_log('nodes', $log_data);
+}
+
+/*
+ * Implements hook_user_presave
+ * Getting the info of affected user updated/created
+ */
+function regular_updates_user_presave($account) {
+  global $user;
+  $log_data = unserialize(REGULAR_UPDATES_EVENT_DATA_STRUCTURE_USERS);
+
+  // This is heavy, but we have to as $account leaves out certain data..
+  $account_full = user_load_by_name($account['name']);
+
+  // If account_full returns false, its a new account (As it has not been created yet)
+  // todo: Because this hook is run before the account is saved, it hasnt been assigned an ID yet.
+  if ($account_full) {
+    $log_data['action'] = 'update';
+    $log_data['uid'] = $account_full->uid;
+    $log_data['name'] = $account_full->name;
+    $log_data['picture'] = $account_full->picture;
+  }
+  else {
+    $log_data['action'] = 'create';
+    $log_data['name'] = $account['name'];
+  }
+
+  $log_data['time'] = time();
+
+  _regular_updates_add_to_event_log('users', $log_data);
+}
+
+/*
+ * Implements hook_user_delete
+ * Getting the info of affected user deleted
+ */
+function regular_updates_user_delete($account) {
+  global $user;
+  $log_data = unserialize(REGULAR_UPDATES_EVENT_DATA_STRUCTURE_USERS);
+
+  $log_data['action'] = 'delete';
+  $log_data['uid'] = $account->uid;
+  $log_data['name'] = $account->name;
+  $log_data['picture'] = $account->picture;
+  $log_data['time'] = time();
+
+  _regular_updates_add_to_event_log('users', $log_data);
+}
+
+/*
+ * Custom callback function for returning email template contents.
+ */
+function _regular_updates_email_template_callback($data = NULL){
+  $output = array(
+    '#theme' => 'regular_updates_email_template',
+    '#data' => $data
+  );
+
+  return render($output);
+}
+
+/*
  * Custom helper function for sending out external data.
  */
 function _regular_updates_send_data($settings) {
-
   $data = _regular_updates_create_data($settings);
 
-
-  if (!is_null($email_data)){
+  if (!is_null($data['email_data'])){
     $target_emails = $settings['target_email_emails'];
 
     //todo
 
     foreach ($target_emails as $email) {
-
+      // We're doing a foreach, to avoid the users seeing eachothers emails.
+      // We could ofc just send an email with all the users in one go.
+      drupal_mail('regular_updates', 'regular_updates_email_template', $email, language_default(), $params = array('subject' => $settings['target_email_subject'], 'body' => $data['email_data']), $from = NULL, $send = TRUE);
     }
   }
 
-  if (!is_null($url_data)){
+  if (!is_null($data['url_data'])){
     $target_urls = $settings['target_api_urls'];
 
     //todo: test
 
     foreach ($target_urls as $url) {
-      drupal_http_request($url, $options = array('data' => $url_data));
+      drupal_http_request($url, $options = array('data' => $data['url_data']));
     }
   }
 }
 
 /*
  * Custom helper function for creating the data to be sent out.
+ * Will return JSON for url_data and an html template for email_data.
  */
 function _regular_updates_create_data($settings) {
   $data = array();
@@ -301,10 +485,13 @@ function _regular_updates_create_data($settings) {
     }
   }
 
-  if ($settings['target_email_enabled'] == 1) {
-    // Generate the email template
-    // maybe as a helper function?
+  if ($settings['target_email_send_as_json']) {
+    $email_data = json_encode($data);
+  }
 
+  else if ($settings['target_email_enabled'] == 1) {
+    // Gets HTML template.
+    $email_data = _regular_updates_email_template_callback($data);
   }
 
   if ($settings['target_api_enabled'] == 1) {
@@ -335,5 +522,69 @@ function _regular_updates_get_settings(){
   }
 
   return $current_settings;
+}
 
+/*
+ * Custom helper for decoding comma/space seperated string to array.
+ */
+function _regular_updates_commaspace_decode($string) {
+  $result = array();
+
+  // Getting rid of any whitespaces.
+  $string = preg_replace('/\s+/', '', $string);
+
+  $result = explode(',', $string);
+  return $result;
+}
+
+/*
+ * Custom helper for encoding one dimensional array into comma seperated string.
+ */
+function _regular_updates_commaspace_encode($array) {
+  $result = '';
+
+  $result = implode(',', $array);
+  return $result;
+}
+
+/*
+ * Custom helper for getting specific event logs.
+ */
+function _regular_updates_get_event_log($event_type) {
+  $logs = array();
+  $event_data_variables = unserialize(REGULAR_UPDATES_EVENT_DATA_VARNAMES);
+
+  // If it exists in the array, it's an allowed log (Like nodes or users).
+  if (array_key_exists($event_type, $event_data_variables)) {
+    $logs = variable_get($event_data_variables[$event_type]);
+  }
+
+  if (!is_array($logs)) {
+    return json_decode($logs);
+  }
+
+  return $logs;
+}
+
+/*
+ * Custom helper for adding to an specific event logs.
+ * $data must be an array.
+ */
+function _regular_updates_add_to_event_log($event_type, $data) {
+  if (empty($data)) {
+    return;
+  }
+
+  $logs = array();
+  $event_data_variables = unserialize(REGULAR_UPDATES_EVENT_DATA_VARNAMES);
+
+  // Getting current data and adding the new.
+  $logs = _regular_updates_get_event_log($event_type);
+
+  $logs[] = $data;
+
+  // If it exists in the array, it's an allowed log (Like nodes or users).
+  if (array_key_exists($event_type, $event_data_variables)) {
+    $logs = json_encode(variable_set($event_data_variables[$event_type], $logs));
+  }
 }

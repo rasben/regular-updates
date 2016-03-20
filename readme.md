@@ -9,4 +9,8 @@ Under development.
 
 ##Todo
 
-- Short array syntax should not be used in Drupal 7.x.
+- Make forum log functionality
+- Make it possible for user to definecustom email template files in the theme folder
+- What if the user has set the cron to run only before the selected trigger time?
+- Get UID of new accounts
+- Also log other user events (such as cancelation of account)
