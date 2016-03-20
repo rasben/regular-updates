@@ -15,3 +15,4 @@ Under development.
 - Get UID of new accounts
 - Also log other user events (such as cancelation of account)
 - Make a kickass default emaiil template
+- Test email from a live domain that can send emails.
