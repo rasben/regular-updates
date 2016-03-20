@@ -14,3 +14,4 @@ Under development.
 - What if the user has set the cron to run only before the selected trigger time?
 - Get UID of new accounts
 - Also log other user events (such as cancelation of account)
+- Make a kickass default emaiil template
